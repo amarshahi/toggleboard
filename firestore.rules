@@ -1,0 +1,101 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: boards
+    // Document ID: boardId
+    // Fields:
+    //   - title: string (required)
+    //   - description: string (optional)
+    //   - creatorId: string (required)
+    //   - creatorEmail: string (optional)
+    //   - isLocked: bool (optional)
+    //   - createdAt: timestamp (required)
+    //   - theme: string (optional)
+    //
+    // Collection: boards/{boardId}/messages
+    // Document ID: messageId
+    // Fields:
+    //   - boardId: string (required)
+    //   - authorName: string (required)
+    //   - content: string (required)
+    //   - mediaUrl: string (optional)
+    //   - mediaType: string (optional)
+    //   - createdAt: timestamp (required)
+    //   - color: string (optional)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null && request.auth.token.email.endsWith('@togglecorp.com');
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.email == "amar.shahi@togglecorp.com" && request.auth.token.email_verified == true
+      );
+    }
+
+    function isValidBoard(data) {
+      return data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.creatorId is string &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidMessage(data) {
+      return data.boardId is string &&
+             data.authorName is string && data.authorName.size() > 0 && data.authorName.size() < 100 &&
+             data.content is string && data.content.size() > 0 && data.content.size() < 5000 &&
+             data.createdAt is timestamp &&
+             (!('mediaUrl' in data) || data.mediaUrl is string) &&
+             (!('mediaType' in data) || data.mediaType in ['image', 'gif']) &&
+             (!('color' in data) || data.color is string) &&
+             (!('authorToken' in data) || data.authorToken is string);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /boards/{boardId} {
+      // Anyone can read a board
+      allow read: if true;
+      
+      // Only authenticated users can create boards (admins)
+      allow create: if isAuthenticated() && isValidBoard(request.resource.data) && request.resource.data.creatorId == request.auth.uid;
+      
+      // Only the owner can update or delete the board
+      allow update: if isAuthenticated() && request.auth.uid == resource.data.creatorId && isValidBoard(request.resource.data);
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.creatorId;
+
+      match /messages/{messageId} {
+        // Anyone can read messages
+        allow read: if true;
+        
+        // Anyone can create a message IF the board is not locked
+        allow create: if !get(/databases/$(database)/documents/boards/$(boardId)).data.isLocked && 
+                        isValidMessage(request.resource.data);
+        
+        // Messages are generally immutable for public users, but admin can delete
+        allow delete: if isAuthenticated() && request.auth.uid == get(/databases/$(database)/documents/boards/$(boardId)).data.creatorId;
+        
+        // Allow updates if the authorToken matches (for anonymous editing)
+        allow update: if !get(/databases/$(database)/documents/boards/$(boardId)).data.isLocked &&
+                        'authorToken' in resource.data && 
+                        resource.data.authorToken == request.resource.data.authorToken &&
+                        isValidMessage(request.resource.data);
+      }
+    }
+  }
+}

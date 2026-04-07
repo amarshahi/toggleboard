@@ -1,0 +1,44 @@
+{
+  "entities": {
+    "Board": {
+      "title": "Board",
+      "description": "A celebration board containing messages.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "Title of the celebration." },
+        "description": { "type": "string", "description": "Description or occasion." },
+        "creatorId": { "type": "string", "description": "UID of the admin who created the board." },
+        "creatorEmail": { "type": "string", "description": "Email of the admin." },
+        "isLocked": { "type": "boolean", "description": "Whether the board is locked for new messages." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp." },
+        "theme": { "type": "string", "description": "Theme color or style." }
+      },
+      "required": ["title", "creatorId", "createdAt"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "A message card on a board.",
+      "type": "object",
+      "properties": {
+        "boardId": { "type": "string", "description": "ID of the parent board." },
+        "authorName": { "type": "string", "description": "Name of the person posting." },
+        "content": { "type": "string", "description": "Text content of the message." },
+        "mediaUrl": { "type": "string", "description": "URL to an image or GIF." },
+        "mediaType": { "type": "string", "enum": ["image", "gif"], "description": "Type of media." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp." },
+        "color": { "type": "string", "description": "Background color of the card." }
+      },
+      "required": ["boardId", "authorName", "content", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/boards/{boardId}": {
+      "schema": "Board",
+      "description": "Collection of celebration boards."
+    },
+    "/boards/{boardId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Subcollection of messages for a specific board."
+    }
+  }
+}
